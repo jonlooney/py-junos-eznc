@@ -178,10 +178,10 @@ class _RpcMetaExec(object):
                 rv = self._junos.execute(rpc)
 
             format = kvargs.get('_format', 'xml')
-            if format == 'xml':
-                return rv
-            else:
+            if format == 'dict':
                 return self._lxmlparser(rv)
+            else:
+                return rv
 
         # metabind help() and the function name to the :rpc_cmd_name:
         # provided by the caller ... that's about all we can do, yo!
