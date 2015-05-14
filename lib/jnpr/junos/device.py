@@ -548,8 +548,14 @@ class Device(object):
         try:
             ret_rpc_rsp = rpc_rsp_e[0]
         except IndexError:
-            # no children, so assume it means we are OK
-            return True
+            # This might mean that the entire document was within the
+            # text of the single root element (such as when the user
+            # requests format=json).
+            if rpc_rsp_e.text and len(rpc_rsp_e.text) > 0:
+                ret_rpc_rsp = rpc_rsp_e.text
+            else:
+                # no children and no text, so assume it means we are OK
+                return True
 
         # if the caller provided a "to Python" conversion function, then invoke
         # that now and return the results of that function.  otherwise just
