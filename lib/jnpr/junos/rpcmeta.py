@@ -2,6 +2,14 @@ import re
 from lxml import etree
 from lxml.builder import E
 
+try:
+    from xmltodict import LXMLParser
+except:
+    class LXMLParser(object):
+        def __init__(self, *args, **kwargs):
+            pass
+        def __call__(self, *args, **kwargs):
+            raise ValueError("xmltodict not found, or does not contain the LXMLParser class; therefore, \"dict\" format is not available. Install an appropriate version of xmltodict to gain access to use the \"dict\" format.")
 
 class _RpcMetaExec(object):
 
@@ -16,12 +24,35 @@ class _RpcMetaExec(object):
           ez-netconf :junos: object
         """
         self._junos = junos
+        self._lxmlparseropts = dict(new_style=True,
+                                    index_keys_compress=False,
+                                    index_keys=('name',))
+        self._lxmlparser = LXMLParser(**self._lxmlparseropts)
+
+    # -----------------------------------------------------------------------
+    # lxmlparseropts property
+    # -----------------------------------------------------------------------
+    @property
+    def lxmlparseropts(self):
+        """
+        The options that are passed to xmltodict.LXMLParser when
+        creating a dict from RPC output.
+        """
+        return self._lxmlparseropts
+
+    @lxmlparseropts.setter
+    def lxmlparseropts(self, value):
+        try:
+            self._lxmlparser = LXMLParser(**value)
+            self._lxmlparseropts = value
+        except:
+            raise
 
     # -----------------------------------------------------------------------
     # get_config
     # -----------------------------------------------------------------------
 
-    def get_config(self, filter_xml=None, options={}):
+    def get_config(self, filter_xml=None, _format='xml', options={}):
         """
         retrieve configuration from the Junos device
 
@@ -40,7 +71,13 @@ class _RpcMetaExec(object):
             at_here.append(filter_xml)
             if at_here is not rpc: rpc.append(at_here)
 
-        return self._junos.execute(rpc)
+        rv = self._junos.execute(rpc)
+        if _format == 'xml':
+            return rv
+        elif _format == 'dict':
+            return self._lxmlparser(rv)
+        else:
+            raise ValueError("Unknown format \"%s\" (expected \"xml\" or \"dict\")" % _format)
 
     # -----------------------------------------------------------------------
     # load_config
@@ -83,7 +120,11 @@ class _RpcMetaExec(object):
         rpc = E('command', command)
         if 'text' == format:
             rpc.attrib['format'] = 'text'
-        return self._junos.execute(rpc)
+        rv = self._junos.execute(rpc)
+        if format == 'dict':
+            return self._lxmlparser(rv)
+        else:
+            return self._junos.execute(rpc)
 
     # -----------------------------------------------------------------------
     # method missing
@@ -108,7 +149,7 @@ class _RpcMetaExec(object):
             # kvargs are the command parameter/values
             if kvargs:
                 for arg_name, arg_value in kvargs.items():
-                    if arg_name != 'dev_timeout':
+                    if arg_name not in ('dev_timeout', '_format'):
                         arg_name = re.sub('_', '-', arg_name)
                         if isinstance(arg_value, (tuple, list)):
                             for a in arg_value:
@@ -132,9 +173,15 @@ class _RpcMetaExec(object):
             timeout = kvargs.get('dev_timeout')
 
             if timeout:
-                return self._junos.execute(rpc, dev_timeout=timeout)
+                rv = self._junos.execute(rpc, dev_timeout=timeout)
             else:
-                return self._junos.execute(rpc)
+                rv = self._junos.execute(rpc)
+
+            format = kvargs.get('_format', 'xml')
+            if format == 'xml':
+                return rv
+            else:
+                return self._lxmlparser(rv)
 
         # metabind help() and the function name to the :rpc_cmd_name:
         # provided by the caller ... that's about all we can do, yo!
