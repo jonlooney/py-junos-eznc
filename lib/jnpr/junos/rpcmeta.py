@@ -71,13 +71,15 @@ class _RpcMetaExec(object):
             at_here.append(filter_xml)
             if at_here is not rpc: rpc.append(at_here)
 
+        if _format not in ('xml', 'dict'):
+            rpc.attrib['format'] = _format
+
         rv = self._junos.execute(rpc)
-        if _format == 'xml':
-            return rv
-        elif _format == 'dict':
+
+        if _format == 'dict':
             return self._lxmlparser(rv)
         else:
-            raise ValueError("Unknown format \"%s\" (expected \"xml\" or \"dict\")" % _format)
+            return rv
 
     # -----------------------------------------------------------------------
     # load_config
@@ -118,13 +120,13 @@ class _RpcMetaExec(object):
 
     def cli(self, command, format='text'):
         rpc = E('command', command)
-        if 'text' == format:
-            rpc.attrib['format'] = 'text'
+        if format not in ('xml', 'dict'):
+            rpc.attrib['format'] = format
         rv = self._junos.execute(rpc)
         if format == 'dict':
             return self._lxmlparser(rv)
         else:
-            return self._junos.execute(rpc)
+            return rv
 
     # -----------------------------------------------------------------------
     # method missing
@@ -167,6 +169,11 @@ class _RpcMetaExec(object):
                     if v is not True:
                         rpc.attrib[k] = v
 
+            # Set the format, if needed
+            format = kvargs.get('_format', 'xml')
+            if format not in ('xml', 'dict'):
+                rpc.attrib['format'] = format
+
             # now invoke the command against the
             # associated :junos: device and return
             # the results per :junos:execute()
@@ -177,7 +184,6 @@ class _RpcMetaExec(object):
             else:
                 rv = self._junos.execute(rpc)
 
-            format = kvargs.get('_format', 'xml')
             if format == 'dict':
                 return self._lxmlparser(rv)
             else:
